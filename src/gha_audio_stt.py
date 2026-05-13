@@ -79,7 +79,7 @@ def run_heavy_lifter():
                     f.write(r.content)
 
             # 切割音檔
-            print("✂️ 啟動音檔切割程序...")
+            print("✂️ 啟陪音檔切割程序...")
             audio = AudioSegment.from_file(local_audio_path)
             total_duration_ms = len(audio)
             
