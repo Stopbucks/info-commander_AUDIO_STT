@@ -1,6 +1,6 @@
 #----------------------------------------
 # 每天 UTC 00:33 與 12:33 執行 (對應台北時間 08:33 與 20:33)
-# .github/workflows/audio_stt.yml (V. 1.0 版) 
+# .github/workflows/audio_stt.yml (V. 1.1 版) 
 #----------------------------------------
 name: AUDIO_STT (Heavy Lifter)
 
@@ -30,13 +30,12 @@ jobs:
 
       - name: Install Python Packages
         run: |
-          pip install supabase pydub httpx requests
+          pip install supabase pydub httpx requests curl_cffi
 
       - name: Execute AUDIO_STT Script
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }} # 🎯 已校準為對應名稱
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-        #run: python scripts/gha_audio_stt.py
-        run: python src/gha_audio_stt.py  # 🎯 這裡改為 src/
+        run: python src/gha_audio_stt.py
