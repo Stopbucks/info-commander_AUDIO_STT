@@ -52,6 +52,8 @@ def run_heavy_lifter():
     # 將排序過的「高進度暫停任務」與「全新任務」組裝起來
     tasks = paused_tasks + pending_tasks
 
+    
+
     heavy_tasks = []
     for t in tasks:
         try:
@@ -63,8 +65,13 @@ def run_heavy_lifter():
         print("✅ 無大型任務需要處理，部隊收隊。")
         return
 
+    global_api_exhausted = False # 🚀 [V2.5] 新增：全局熔斷旗標
+
     # 💡 現在 heavy_tasks 陣列的第 0 號位，絕對是資料量最豐富、最接近打完的任務！
     for task in heavy_tasks:
+        if global_api_exhausted:
+            break # 如果已經全線熔斷，直接跳出不處理後續任務
+
         task_id = task["id"]
         filename = task.get("r2_url")
 
@@ -114,7 +121,7 @@ def run_heavy_lifter():
 
             # 執行聽寫 (調用 stt_router 的重火力)
             all_success = True
-            success_in_this_run = 0  # 🚀 [V2.4] 新增：追蹤本次喚醒中成功打擊的次數
+            success_in_this_run = 0  
             
             for c in chunks_info:
                 idx_str = str(c["idx"])
@@ -133,15 +140,18 @@ def run_heavy_lifter():
                     success_in_this_run += 1
                     print(f"✅ 區塊 {idx_str} 聽寫成功！")
                     
-                    # 🚀 [V2.4 節奏防爆] 每打擊成功 2 個區塊，強制深休眠以清洗 Groq RPM 計數器
                     if success_in_this_run % 2 == 0:
                         print("⏳ [防爆裝甲] 已連續完成 2 次打擊，進入 45 秒戰術休眠，規避每分鐘請求限制 (RPM)...")
                         time.sleep(45)
                     else:
-                        time.sleep(5) # 平常只需短暫緩衝
+                        time.sleep(5) 
                 else:
                     print(f"⚠️ 區塊 {idx_str} 遭遇反擊 (錯誤: {status})")
                     all_success = False
+                    # 🚀 [新增] 偵測到 429 限流，舉起全局熔斷紅旗
+                    if "429" in status:
+                        print("🚨 [系統警報] 偵測到 API 額度全面耗盡，準備觸發全局熔斷！")
+                        global_api_exhausted = True
                     break 
 
             # 戰術結算與寫入 mission_intel
@@ -149,7 +159,6 @@ def run_heavy_lifter():
                 print("🎉 所有區塊打擊完畢！開始寫入 mission_intel 歸檔...")
                 full_text = "".join([checkpoint[str(i)]["text"] + "\n\n" for i in range(len(chunks_info))])
                 
-                # 🎯 [欺敵戰術 1] 偽裝 Provider
                 intel_payload = {
                     "task_id": task_id,
                     "intel_status": "Sum.-pre",
@@ -163,12 +172,11 @@ def run_heavy_lifter():
                 else:
                     sb.table("mission_intel").insert(intel_payload).execute()
 
-                # 🎯 [欺敵戰術 2] 偽裝檔案大小
                 sb.table("mission_queue").update({
                     "status": "pending", 
                     "soft_failure_count": 0,
                     "gha_checkpoint": None,
-                    "audio_size_mb": 29.9   # 🌟 啟動雷達欺敵
+                    "audio_size_mb": 29.9   
                 }).eq("id", task_id).execute()
                 
                 print("🚀 任務完全結束，情報已入庫並完成雷達偽裝，收隊！")
@@ -180,5 +188,11 @@ def run_heavy_lifter():
                     "gha_checkpoint": checkpoint
                 }).eq("id", task_id).execute()
                 
+                # 🚀 [新增] 執行熔斷撤退
+                if global_api_exhausted:
+                    print("🛑 [全局熔斷] 為保護 API 帳號安全，機甲放棄剩餘任務，全面進入靜默休眠。")
+                    return # 直接結束 run_heavy_lifter 函式
+
 if __name__ == "__main__":
     run_heavy_lifter()
+
