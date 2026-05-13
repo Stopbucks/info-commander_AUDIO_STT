@@ -97,16 +97,19 @@ def check_and_update_quota(sb, provider_name):
 # 🎤 獨立 STT API 呼叫模組
 # =========================================================
 
+
+
 def _call_groq(api_key, audio_data, filename, mime_type):
-    # 執行 Groq STT 聽寫，具備三模型自動降級功能
+    # 執行 Groq STT 聽寫，具備雙核模型自動降級功能
     if not api_key: return None, "NO_API_KEY"
     print("🎯 [Plan B] 呼叫 Groq 聽寫...")
     
-    # 🚀 [V6.18 三箭頭陣列] 
+    # 🚀 [V6.19 穩固雙核版] 
+    # 拔除官方 API 異常的 distil 模型。
+    # 首選極速 Turbo，限流時降級至原版 Whisper-V3 進行穩定輸出。
     groq_stt_models = [
-        "whisper-large-v3-turbo",       # 首選：極速版 Turbo
-        "distil-whisper-large-v3",      # 備援 1：英文輕量蒸餾版
-        "whisper-large-v3"              # 備援 2：最終防線
+        "whisper-large-v3-turbo", 
+        "whisper-large-v3"
     ]
     
     last_error = ""
@@ -124,11 +127,15 @@ def _call_groq(api_key, audio_data, filename, mime_type):
             if resp.status_code == 200: 
                 return resp.text, "SUCCESS"
             
+            # 🛡️ 捕捉 429 限流或 502/503 伺服器抖動
             elif resp.status_code in [429, 502, 503]:
                 last_error = f"GROQ_HTTP_{resp.status_code}_{resp.text[:50]}"
-                print(f"   ⚠️ 模型 {model_name} 暫時無法連線或限流，切換下一順位...")
+                print(f"   ⚠️ 模型 {model_name} 暫時無法連線或限流 (HTTP {resp.status_code})。")
+                print("   ⏳ 進入 10 秒戰術冷卻，準備切換下一順位...")
+                time.sleep(10) # 讓 Groq 的 Token 桶稍微恢復
                 continue
             else:
+                # 發生 400 (Bad Request) 等不可恢復錯誤，直接報錯不浪費時間
                 return None, f"GROQ_HTTP_{resp.status_code}_{resp.text[:50]}"
                 
         except Exception as e:
@@ -137,6 +144,7 @@ def _call_groq(api_key, audio_data, filename, mime_type):
             continue
             
     return None, last_error
+
 
 def _call_gladia(api_key, audio_url, sb=None):
     if not api_key: return None, "NO_API_KEY"
