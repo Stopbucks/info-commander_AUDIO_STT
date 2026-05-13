@@ -6,8 +6,9 @@ name: AUDIO_STT (Heavy Lifter)
 
 on:
   schedule:
-    # 每天 UTC 00:33 與 12:33 執行 (對應台北時間 08:33 與 20:33)
-    - cron: '33 0,12 * * *'
+    # 每天僅在 UTC 21:32 (台灣時間清晨 05:32) 執行一次「夜間掃蕩」    
+    #- cron: '33 0,12 * * *'
+    - cron: '32 21 * * *'
   workflow_dispatch: # 允許您在 GitHub 後台手動按鈕觸發測試
 
 jobs:
