@@ -1,10 +1,12 @@
 # ---------------------------------------------------------
-# src/gha_audio_stt.py (V2.4 節奏防爆版)
+# src/gha_audio_stt.py (V2.5 終極雷達防爆版)
 # 任務：GHA 專屬重裝機甲，專職處理 >24.5MB 之巨型音檔。
 # 戰術：攔截大檔 -> 30分切塊 -> 節奏防爆 -> Groq 聽打 -> 雷達欺敵。
+# [V2.5 重大升級] 
+# 1. 實裝「加權雷達掃描」：依據 gha_checkpoint 字串長度進行降冪排序，
+#    強制機甲優先處理「最接近完工」的未竟事業，極限最大化投資報酬率 (ROI)。
 # [V2.4 重大升級] 
-# 1. 實裝「主動式節奏防爆 (Proactive Pacing)」：每成功聽寫 2 個區塊，
-#    強制深休眠 45 秒，完美規避 Groq 每分鐘請求數 (RPM) 的滾動限制！
+# 1. 實裝「主動式節奏防爆」：每成功聽寫 2 個區塊，強制深休眠 45 秒。
 # ---------------------------------------------------------
 import os, time, tempfile
 import httpx
@@ -32,10 +34,23 @@ def run_heavy_lifter():
 
     sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    # 1. 雷達掃描
-    print("🔍 [AUDIO_STT] 雷達掃描 mission_queue 中...")
-    response = sb.table("mission_queue").select("*").in_("status", ["pending", "GHA_PAUSED", "FAILED"]).execute()
-    tasks = response.data
+    # 1. 雷達掃描 (戰術優化：優先處理接近完工的未竟事業)
+    print("🔍 [AUDIO_STT] 啟動進階雷達掃描 (進度排序模式)...")
+    
+    # 🎯 優先搜尋 1：被暫停的重型任務 (GHA_PAUSED)
+    response_paused = sb.table("mission_queue").select("*").eq("status", "GHA_PAUSED").execute()
+    paused_tasks = response_paused.data or []
+    
+    # 🧠 戰術核心：根據 gha_checkpoint 的「字串長度」進行降冪排序 (Reverse=True)
+    # 字數越多代表完成的區塊越多，越接近完工，優先排在陣列最前面！
+    paused_tasks.sort(key=lambda t: len(str(t.get("gha_checkpoint") or "")), reverse=True)
+    
+    # 🎯 優先搜尋 2：全新的重型任務 (pending) 或失敗的任務 (FAILED)
+    response_pending = sb.table("mission_queue").select("*").in_("status", ["pending", "FAILED"]).execute()
+    pending_tasks = response_pending.data or []
+    
+    # 將排序過的「高進度暫停任務」與「全新任務」組裝起來
+    tasks = paused_tasks + pending_tasks
 
     heavy_tasks = []
     for t in tasks:
@@ -48,6 +63,7 @@ def run_heavy_lifter():
         print("✅ 無大型任務需要處理，部隊收隊。")
         return
 
+    # 💡 現在 heavy_tasks 陣列的第 0 號位，絕對是資料量最豐富、最接近打完的任務！
     for task in heavy_tasks:
         task_id = task["id"]
         filename = task.get("r2_url")
