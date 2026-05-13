@@ -1,5 +1,6 @@
+
 # ---------------------------------------------------------
-# src/gha_audio_stt.py (V2.1 模組化最終版)
+# src/gha_audio_stt.py (V2.2 雷達精確校準版)
 # 任務：GHA 專屬重裝機甲，專職處理 >24.5MB 之巨型音檔。
 # 戰術：攔截大檔 -> 切割 -> 調用 stt_router 的 Groq 專武 -> 寫入 mission_intel。
 # ---------------------------------------------------------
@@ -8,7 +9,7 @@ import httpx
 from pydub import AudioSegment
 from supabase import create_client, Client
 
-# 🚀 匯入您的 Router 模組中的 Groq 專武
+# 🚀 匯入 Router 模組中的 Groq 專武
 from src.pod_scra_intel_stt_router import _call_groq
 
 # --- 戰情室配置 ---
@@ -29,9 +30,10 @@ def run_heavy_lifter():
 
     sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    # 1. 雷達掃描：從 mission_queue 尋找等待中或暫停中的任務
+    # 1. 雷達掃描：從 mission_queue 尋找等待中 (pending) 或暫停中 (GHA_PAUSED) 的任務
+    # 🎯 [V2.2 校準] 將 scrape_status 改為 status
     print("🔍 [AUDIO_STT] 雷達掃描 mission_queue 中...")
-    response = sb.table("mission_queue").select("*").in_("scrape_status", ["pending", "GHA_PAUSED"]).execute()
+    response = sb.table("mission_queue").select("*").in_("status", ["pending", "GHA_PAUSED", "FAILED"]).execute()
     tasks = response.data
 
     heavy_tasks = []
@@ -52,7 +54,8 @@ def run_heavy_lifter():
         print(f"\n🚀 [AUDIO_STT] 鎖定重裝任務: {task.get('episode_title', 'Unknown')} (ID: {task_id})")
 
         # 2. 標記狀態為處理中
-        sb.table("mission_queue").update({"scrape_status": "GHA_PROCESSING"}).eq("id", task_id).execute()
+        # 🎯 [V2.2 校準] 將 scrape_status 改為 status
+        sb.table("mission_queue").update({"status": "GHA_PROCESSING"}).eq("id", task_id).execute()
 
         checkpoint = task.get("gha_checkpoint") or {}
         
@@ -63,7 +66,8 @@ def run_heavy_lifter():
                 r = client.get(file_url)
                 if r.status_code != 200:
                     print(f"⚠️ 下載失敗 (HTTP {r.status_code})，撤退。")
-                    sb.table("mission_queue").update({"scrape_status": "pending"}).eq("id", task_id).execute()
+                    # 🎯 [V2.2 校準] 將 scrape_status 改為 status
+                    sb.table("mission_queue").update({"status": "pending"}).eq("id", task_id).execute()
                     continue
                 with open(local_audio_path, 'wb') as f:
                     f.write(r.content)
@@ -128,8 +132,9 @@ def run_heavy_lifter():
                 else:
                     sb.table("mission_intel").insert(intel_payload).execute()
 
+                # 🎯 [V2.2 校準] 將 scrape_status 改為 status
                 sb.table("mission_queue").update({
-                    "scrape_status": "pending",
+                    "status": "pending", # 解鎖回 pending 讓其他機甲知道它還活著
                     "soft_failure_count": 0,
                     "gha_checkpoint": None
                 }).eq("id", task_id).execute()
@@ -138,8 +143,9 @@ def run_heavy_lifter():
             
             else:
                 print("⏸️ 火力不足，執行戰術撤退並儲存 Checkpoint 至 mission_queue...")
+                # 🎯 [V2.2 校準] 將 scrape_status 改為 status
                 sb.table("mission_queue").update({
-                    "scrape_status": "GHA_PAUSED", 
+                    "status": "GHA_PAUSED", 
                     "gha_checkpoint": checkpoint
                 }).eq("id", task_id).execute()
                 
