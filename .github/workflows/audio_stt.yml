@@ -1,0 +1,41 @@
+#----------------------------------------
+# 每天 UTC 00:33 與 12:33 執行 (對應台北時間 08:33 與 20:33)
+# .github/workflows/audio_stt.yml (V. 1.0 版) 
+#----------------------------------------
+name: AUDIO_STT (Heavy Lifter)
+
+on:
+  schedule:
+    # 每天 UTC 00:33 與 12:33 執行 (對應台北時間 08:33 與 20:33)
+    - cron: '33 0,12 * * *'
+  workflow_dispatch: # 允許您在 GitHub 後台手動按鈕觸發測試
+
+jobs:
+  heavy_stt_mission:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install System Dependencies (ffmpeg for pydub)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python Packages
+        run: |
+          pip install supabase pydub httpx requests
+
+      - name: Execute AUDIO_STT Script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }} # 請使用 Service Role Key 確保權限
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+        run: python scripts/gha_audio_stt.py
