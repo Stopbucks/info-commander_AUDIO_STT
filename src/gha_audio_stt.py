@@ -1,11 +1,10 @@
 # ---------------------------------------------------------
-# src/gha_audio_stt.py (V2.3 雷達欺敵版)
+# src/gha_audio_stt.py (V2.4 節奏防爆版)
 # 任務：GHA 專屬重裝機甲，專職處理 >24.5MB 之巨型音檔。
-# 戰術：攔截大檔 -> 30分切塊防爆 -> 調用 stt_router 的 Groq 專武 -> 寫入 mission_intel。
-# [V2.3 重大升級]
-# 1. 縮小切塊為 30 分鐘，絕對確保單檔小於 Groq 25MB 極限 (消滅 413 錯誤)。
-# 2. 增加 r2_url 空值防呆過濾 (消滅 404 錯誤)。
-# 3. 雷達欺敵系統：完成後偽裝為 GROQ 供應商與 29.9MB，誘導 T2 小機甲無縫接手純文字摘要。
+# 戰術：攔截大檔 -> 30分切塊 -> 節奏防爆 -> Groq 聽打 -> 雷達欺敵。
+# [V2.4 重大升級] 
+# 1. 實裝「主動式節奏防爆 (Proactive Pacing)」：每成功聽寫 2 個區塊，
+#    強制深休眠 45 秒，完美規避 Groq 每分鐘請求數 (RPM) 的滾動限制！
 # ---------------------------------------------------------
 import os, time, tempfile
 import httpx
@@ -23,7 +22,7 @@ R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "").rstrip('/')
 
 # 戰術參數
 SIZE_THRESHOLD_MB = 24.5      # 啟動門檻
-CHUNK_LENGTH_MS = 30 * 60 * 1000  # 縮小切割：每塊 30 分鐘 (確保轉出的 MP3 絕對低於 Groq 的 25MB 極限)
+CHUNK_LENGTH_MS = 30 * 60 * 1000  # 縮小切割：每塊 30 分鐘
 OVERLAP_MS = 10 * 1000        # 重疊 10 秒
 
 def run_heavy_lifter():
@@ -33,7 +32,7 @@ def run_heavy_lifter():
 
     sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    # 1. 雷達掃描：從 mission_queue 尋找等待中 (pending) 或暫停中 (GHA_PAUSED) 的任務
+    # 1. 雷達掃描
     print("🔍 [AUDIO_STT] 雷達掃描 mission_queue 中...")
     response = sb.table("mission_queue").select("*").in_("status", ["pending", "GHA_PAUSED", "FAILED"]).execute()
     tasks = response.data
@@ -53,7 +52,7 @@ def run_heavy_lifter():
         task_id = task["id"]
         filename = task.get("r2_url")
 
-        # 🛡️ 防呆機制：如果 r2_url 是空的或無效字串，直接跳過，避免引發 HTTP 404
+        # 🛡️ 防呆機制
         if not filename or str(filename).lower() in ["none", "null", ""]:
             print(f"⚠️ [AUDIO_STT] 任務 {task_id[:8]} 尚無有效的音檔網址 (r2_url: {filename})，略過。")
             continue
@@ -79,7 +78,7 @@ def run_heavy_lifter():
                     f.write(r.content)
 
             # 切割音檔
-            print("✂️ 啟陪音檔切割程序...")
+            print("✂️ 啟動音檔切割程序...")
             audio = AudioSegment.from_file(local_audio_path)
             total_duration_ms = len(audio)
             
@@ -99,6 +98,8 @@ def run_heavy_lifter():
 
             # 執行聽寫 (調用 stt_router 的重火力)
             all_success = True
+            success_in_this_run = 0  # 🚀 [V2.4] 新增：追蹤本次喚醒中成功打擊的次數
+            
             for c in chunks_info:
                 idx_str = str(c["idx"])
                 if checkpoint.get(idx_str) and checkpoint[idx_str].get("status") == "SUCCESS":
@@ -113,8 +114,15 @@ def run_heavy_lifter():
                 
                 if status == "SUCCESS":
                     checkpoint[idx_str] = {"status": "SUCCESS", "text": text}
+                    success_in_this_run += 1
                     print(f"✅ 區塊 {idx_str} 聽寫成功！")
-                    time.sleep(5) 
+                    
+                    # 🚀 [V2.4 節奏防爆] 每打擊成功 2 個區塊，強制深休眠以清洗 Groq RPM 計數器
+                    if success_in_this_run % 2 == 0:
+                        print("⏳ [防爆裝甲] 已連續完成 2 次打擊，進入 45 秒戰術休眠，規避每分鐘請求限制 (RPM)...")
+                        time.sleep(45)
+                    else:
+                        time.sleep(5) # 平常只需短暫緩衝
                 else:
                     print(f"⚠️ 區塊 {idx_str} 遭遇反擊 (錯誤: {status})")
                     all_success = False
@@ -125,7 +133,7 @@ def run_heavy_lifter():
                 print("🎉 所有區塊打擊完畢！開始寫入 mission_intel 歸檔...")
                 full_text = "".join([checkpoint[str(i)]["text"] + "\n\n" for i in range(len(chunks_info))])
                 
-                # 🎯 [欺敵戰術 1] 偽裝 Provider：讓 T2 誤以為這是一般的 GROQ 任務，從而啟動「純文字不下載音檔」的安全模式
+                # 🎯 [欺敵戰術 1] 偽裝 Provider
                 intel_payload = {
                     "task_id": task_id,
                     "intel_status": "Sum.-pre",
@@ -139,7 +147,7 @@ def run_heavy_lifter():
                 else:
                     sb.table("mission_intel").insert(intel_payload).execute()
 
-                # 🎯 [欺敵戰術 2] 偽裝檔案大小：強制設定為 29.9MB，讓任務順利滑入 T2 部隊的 30MB 雷達掃描範圍
+                # 🎯 [欺敵戰術 2] 偽裝檔案大小
                 sb.table("mission_queue").update({
                     "status": "pending", 
                     "soft_failure_count": 0,
