@@ -38,4 +38,5 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }} # 🎯 已校準為對應名稱
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-        run: python scripts/gha_audio_stt.py
+        #run: python scripts/gha_audio_stt.py
+        run: python src/gha_audio_stt.py  # 🎯 這裡改為 src/
