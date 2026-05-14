@@ -1,10 +1,10 @@
 # ---------------------------------------------------------
-# src/gha_audio_stt.py (V4.3 顆粒度煞車測試版)
+# src/gha_audio_stt.py (V4.4 楚河漢界嚴謹防禦版)
 # 任務：GHA 專屬重裝機甲，專職處理 >24.5MB 之巨型音檔。
-# [V4.3 重大升級] 
-# 1. 實裝「聽打區塊煞車 (CHUNK_STT_LIMIT)」：精準控制呼叫 Groq 的次數，防護力 MAX。
-# 2. 跨界火力：直接 import T2 的武器庫，無腦重用邏輯。
-# 3. 2小時時間鎖：超時自動安全撤退。
+# [V4.4 重大升級] 
+# 1. 嚴格實體防禦：先驗證大小，再驗證狀態。絕對不干涉 T2 部隊的小型任務。
+# 2. 實裝「聽打區塊煞車 (CHUNK_STT_LIMIT)」：精準控制呼叫 Groq 次數。
+# 3. 跨界火力：直接 import T2 的武器庫，無腦重用邏輯。
 # 4. 防抹除結案：母表標記為 completed_gha_AudioSTT。
 # ---------------------------------------------------------
 import os, time, tempfile
@@ -66,7 +66,7 @@ def run_heavy_lifter():
 
     sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    log_mission_status(sb, "SUCCESS", f"🚀 [{WORKER_ID} V4.3] 重裝巨獸覺醒！執行精準煞車測試...")
+    log_mission_status(sb, "SUCCESS", f"🚀 [{WORKER_ID} V4.4] 重裝巨獸覺醒！執行精準煞車測試...")
     
     response_paused = sb.table("mission_queue").select("*").eq("status", "GHA_PAUSED").execute()
     paused_tasks = response_paused.data or []
@@ -83,13 +83,25 @@ def run_heavy_lifter():
     heavy_tasks = []
     for t in tasks:
         task_id = t["id"]
-        if task_id in completed_task_ids:
-            sb.table("mission_queue").update({"status": "completed_gha_AudioSTT", "scrape_status": "completed_gha_AudioSTT"}).eq("id", task_id).execute()
-            continue
+        
+        # 🛡️ 第一道防線：判斷載重量！不夠重的，GHA 連看都不看
+        audio_size = 0
         try:
-            if float(t.get("audio_size_mb", 0)) > SIZE_THRESHOLD_MB:
-                heavy_tasks.append(t)
+            audio_size = float(t.get("audio_size_mb", 0))
         except: pass
+
+        if audio_size <= SIZE_THRESHOLD_MB:
+            continue # 🚀 尊重 T2 流程，直接跳過不處理！
+
+        # 🛡️ 第二道防線：確認是巨獸後，才檢查是否已經被結案。
+        if task_id in completed_task_ids:
+            sb.table("mission_queue").update({
+                "status": "completed_gha_AudioSTT", 
+                "scrape_status": "completed_gha_AudioSTT"
+            }).eq("id", task_id).execute()
+            continue
+            
+        heavy_tasks.append(t)
 
     if not heavy_tasks:
         log_mission_status(sb, "INFO", "✅ 無大型任務需要處理，部隊收隊。")
@@ -146,8 +158,8 @@ def run_heavy_lifter():
                 start_ms += (CHUNK_LENGTH_MS - OVERLAP_MS) 
                 chunk_idx += 1
 
-            # 🎯 直接印在 GHA 的 Console 裡，不寫入資料庫
-            print(f"🔪 [STT 切割戰報] 音檔切割完畢！總共分為 {len(chunks_info)} 個區塊。")               
+            # 🎯 直接印在 GHA 的 Console 裡
+            print(f"🔪 [STT 切割戰報] 音檔切割完畢！總共分為 {len(chunks_info)} 個區塊。")                
 
             all_stt_success = True
             success_in_this_run = 0  
@@ -243,4 +255,3 @@ def run_heavy_lifter():
 
 if __name__ == "__main__":
     run_heavy_lifter()
-
