@@ -1,15 +1,15 @@
+
 #----------------------------------------
 # 每天僅在 UTC 21:32 (台灣時間清晨 05:32) 執行一次「夜間掃蕩」
-# .github/workflows/audio_stt.yml (V. 1.1 版) 
+# .github/workflows/audio_stt.yml (V1.2 一條龍強化版) 
 #----------------------------------------
 name: AUDIO_STT (Heavy Lifter)
 
 on:
   schedule:
-    # 每天僅在 UTC 21:32 (台灣時間清晨 05:32) 執行一次「夜間掃蕩」    
-    #- cron: '33 0,12 * * *'
+    # 每天執行一次夜間掃蕩
     - cron: '32 21 * * *'
-  workflow_dispatch: # 允許您在 GitHub 後台手動按鈕觸發測試
+  workflow_dispatch: # 允許手動觸發測試
 
 jobs:
   heavy_stt_mission:
@@ -24,20 +24,32 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install System Dependencies (ffmpeg for pydub)
+      - name: Install System Dependencies (FFmpeg)
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Install Python Packages
+      - name: Install Python Packages (Uniform Armor)
         run: |
-          pip install supabase pydub httpx requests curl_cffi
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Execute AUDIO_STT Script
+      - name: Execute GHA_AudioSTT Heavy Mission
         env:
+          # --- 基礎通訊密碼 ---
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-          PYTHONPATH: .  # 🎯 (定位線) 加入這一行，校準 Python 的尋址雷達
+          
+          # --- AI 火力密碼 ---
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          
+          # --- Telegram 戰報密碼 ---
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          
+          # --- 身分與環境配置 ---
+          WORKER_ID: "GHA_AudioSTT"
+          PYTHONPATH: .
         run: python src/gha_audio_stt.py
