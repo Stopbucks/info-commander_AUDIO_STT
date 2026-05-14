@@ -1,11 +1,12 @@
 # ---------------------------------------------------------
-# src/gha_audio_stt.py (V4.4 楚河漢界嚴謹防禦版)
+# src/gha_audio_stt.py (V4.5 檔案館移交版)
 # 任務：GHA 專屬重裝機甲，專職處理 >24.5MB 之巨型音檔。
-# [V4.4 重大升級] 
-# 1. 嚴格實體防禦：先驗證大小，再驗證狀態。絕對不干涉 T2 部隊的小型任務。
-# 2. 實裝「聽打區塊煞車 (CHUNK_STT_LIMIT)」：精準控制呼叫 Groq 次數。
-# 3. 跨界火力：直接 import T2 的武器庫，無腦重用邏輯。
-# 4. 防抹除結案：母表標記為 completed_gha_AudioSTT。
+# [V4.5 重大升級] 
+# 1. 歸檔無縫接軌：結案標籤改回標準的 `completed`，讓 HF 機器人能自動識別、
+#    將十幾萬字逐字稿上傳至 HF 檔案館，並清空 Supabase 空間。
+# 2. 嚴格實體防禦：先驗證大小，再驗證狀態。絕對不干涉 T2 部隊的小型任務。
+# 3. 實裝「聽打區塊煞車 (CHUNK_STT_LIMIT)」：精準控制呼叫 Groq 次數。
+# 4. 跨界火力：直接 import T2 的武器庫，無腦重用邏輯。
 # ---------------------------------------------------------
 import os, time, tempfile
 import httpx
@@ -66,7 +67,7 @@ def run_heavy_lifter():
 
     sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    log_mission_status(sb, "SUCCESS", f"🚀 [{WORKER_ID} V4.4] 重裝巨獸覺醒！執行精準煞車測試...")
+    log_mission_status(sb, "SUCCESS", f"🚀 [{WORKER_ID} V4.5] 重裝巨獸覺醒！執行精準煞車測試...")
     
     response_paused = sb.table("mission_queue").select("*").eq("status", "GHA_PAUSED").execute()
     paused_tasks = response_paused.data or []
@@ -96,8 +97,8 @@ def run_heavy_lifter():
         # 🛡️ 第二道防線：確認是巨獸後，才檢查是否已經被結案。
         if task_id in completed_task_ids:
             sb.table("mission_queue").update({
-                "status": "completed_gha_AudioSTT", 
-                "scrape_status": "completed_gha_AudioSTT"
+                "status": "completed", 
+                "scrape_status": "completed"
             }).eq("id", task_id).execute()
             continue
             
@@ -244,14 +245,15 @@ def run_heavy_lifter():
             }
             sb.table("mission_intel").upsert(intel_payload, on_conflict="task_id").execute()
             
+            # 💡 [標準結案] 改回 completed，完美交接給 HF 歸檔機器人
             sb.table("mission_queue").update({
-                "status": "completed_gha_AudioSTT", 
-                "scrape_status": "completed_gha_AudioSTT",
+                "status": "completed", 
+                "scrape_status": "completed",
                 "soft_failure_count": 0,
                 "gha_checkpoint": None
             }).eq("id", task_id).execute()
             
-            log_mission_status(sb, "SUCCESS", f"🚀 {task_id[:8]} 一條龍任務完美結束 (防抹除標記已生效)！")
+            log_mission_status(sb, "SUCCESS", f"🚀 {task_id[:8]} 一條龍任務完美結束，已標記 completed 等待 HF 歸檔！")
 
 if __name__ == "__main__":
     run_heavy_lifter()
