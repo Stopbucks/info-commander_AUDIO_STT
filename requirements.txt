@@ -1,0 +1,18 @@
+# -------------------------------------------------------------
+# --- S-Plan Fortress V6.10 全軍統一標準清單 ---
+# -------------------------------------------------------------
+flask
+gunicorn
+curl_cffi>=0.7.0     # 🚀 主力連線
+supabase>=2.4.0      # 🚀 資料庫連線
+postgrest>=0.16.4    # 🚀 查詢引擎
+httpx>=0.27.2        # 🚀 專攻大檔上傳
+python-dotenv
+boto3                # 🚀 R2 存儲操作
+feedparser
+pytz
+pydub                # 🚀 音檔處理 (GHA 必備)
+imageio-ffmpeg       # 🚀 FFmpeg 引擎
+groq                 # 🛡️ Groq 摘要與 STT 
+google-generativeai  # 🧠 Gemini 14MB+ 大檔 SDK
+tenacity             # 🛡️ 防爆重試機制
