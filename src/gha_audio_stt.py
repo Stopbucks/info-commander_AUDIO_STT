@@ -146,6 +146,9 @@ def run_heavy_lifter():
                 start_ms += (CHUNK_LENGTH_MS - OVERLAP_MS) 
                 chunk_idx += 1
 
+            # 🎯 直接印在 GHA 的 Console 裡，不寫入資料庫
+            print(f"🔪 [STT 切割戰報] 音檔切割完畢！總共分為 {len(chunks_info)} 個區塊。")               
+
             all_stt_success = True
             success_in_this_run = 0  
             
